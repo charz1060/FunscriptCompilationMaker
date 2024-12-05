@@ -8,7 +8,9 @@ To install the required libraries, run the following command: `pip install -r re
 ## Launching the UI
 Running the Python script will open the User Interface.
 
-![UIPreview](https://github.com/user-attachments/assets/f6e3e12f-e3c9-4c5d-a237-105b11795f05)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/f6e3e12f-e3c9-4c5d-a237-105b11795f05" />
+</p>
 
 ## Using the Application
 
