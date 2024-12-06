@@ -7,6 +7,8 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.video.compositing.concatenate import concatenate_videoclips
 
 
+selected_index = None
+
 def process_file(input_file_path, start_threshold, end_threshold):
     """
     Processes a .funscript file to retain 'actions' within a range and offset 'at' values.
@@ -29,9 +31,10 @@ def cut_video(video_file_path, start_ms, end_ms):
     """
     Cuts a portion of the video based on start and end milliseconds using FFmpeg.
     """
+    global selected_index
     start_s = start_ms / 1000  # Convert milliseconds to seconds
     end_s = end_ms / 1000  # Convert milliseconds to seconds
-    output_file = f"cut_{os.path.basename(video_file_path)}"
+    output_file = f"cut{start_ms}_{os.path.basename(video_file_path)}"
 
     # Construct the FFmpeg command
     ffmpeg_command = [
@@ -72,11 +75,11 @@ def browse_files():
         # Add .funscript file to the listbox
         json_files_listbox.insert(tk.END, funscript_file)
         # Initialize thresholds as empty for new files
-        file_thresholds[funscript_file] = {'start': 0, 'end': 0}
-        update_threshold_fields(funscript_file)
+        file_thresholds[json_files_listbox.size() - 1] = {'start': 0, 'end': 0}  # Index-based tracking
+        update_threshold_fields(json_files_listbox.size() - 1)
 
 
-def update_threshold_fields(file):
+def update_threshold_fields(index):
     """
     Updates the start and end threshold fields when a .funscript file is selected.
     """
@@ -84,32 +87,19 @@ def update_threshold_fields(file):
     end_entry.delete(0, tk.END)
 
     # Get the current thresholds for the selected file
-    if file in file_thresholds:
-        start_entry.insert(0, file_thresholds[file]['start'])
-        end_entry.insert(0, file_thresholds[file]['end'])
-
-
-def save_thresholds():
-    """
-    Save the updated thresholds for the selected .funscript file.
-    """
-    selected_file = json_files_listbox.get(json_files_listbox.curselection())
-    try:
-        start_threshold = int(start_entry.get())
-        end_threshold = int(end_entry.get())
-        file_thresholds[selected_file] = {'start': start_threshold, 'end': end_threshold}
-        print(f"Saved thresholds for {selected_file}: Start - {start_threshold} ms, End - {end_threshold} ms")
-    except ValueError:
-        messagebox.showerror("Invalid Input", "Please enter valid numeric values for thresholds.")
-
-
+    if index in file_thresholds:
+        start_entry.insert(0, milliseconds_to_time(file_thresholds[index]['start']))
+        end_entry.insert(0, milliseconds_to_time(file_thresholds[index]['end']))
 
 def on_select_file(event):
     """
     Handles .funscript file selection from the listbox, updates the threshold fields.
     """
-    selected_file = json_files_listbox.get(json_files_listbox.curselection())
-    update_threshold_fields(selected_file)
+    global selected_index
+    selection = json_files_listbox.curselection()
+    if selection:
+        selected_index = selection[0]  # Get the first selected index
+        update_threshold_fields(selected_index)
 
 
 def remove_selected():
@@ -131,16 +121,18 @@ def process_all_files():
     try:
         all_actions = []
         video_clips = []
-        for i, json_file in enumerate(json_files_listbox.get(0, tk.END)):
-            # Get the thresholds for each file
-            start_threshold = file_thresholds[json_file]['start']
-            end_threshold = file_thresholds[json_file]['end']
+        for i in range(json_files_listbox.size()):
+            # Get the file path and thresholds for this instance
+            funscript_file = json_files_listbox.get(i)
+            start_threshold = file_thresholds[i]['start']
+            end_threshold = file_thresholds[i]['end']
 
-            # Process the JSON file
-            filtered_actions = process_file(json_file, start_threshold, end_threshold)
+            # Process the .funscript file
+            filtered_actions = process_file(funscript_file, start_threshold, end_threshold)
             all_actions.append(filtered_actions)
 
-            video_file = json_file.replace('.funscript', '.mp4')  # Assuming video has the same name as JSON file
+            # Handle corresponding video file
+            video_file = funscript_file.replace('.funscript', '.mp4')
             if os.path.exists(video_file) and (combine_scripts_and_cut_videos_var.get() or combine_scripts_and_videos_var.get()):
                 video_clip = cut_video(video_file, start_threshold, end_threshold)
                 video_clips.append(video_clip)
@@ -152,14 +144,7 @@ def process_all_files():
             with open(combined_file_path, 'w') as file:
                 json.dump({'actions': combined_actions}, file, indent=4)
 
-        # Combine actions and cut videos if "Combine Scripts and Cut Videos" checkbox is selected
-        if combine_scripts_and_cut_videos_var.get():
-            combined_actions = combine_actions(all_actions)
-            combined_file_path = "Combined_Actions.funscript"
-            with open(combined_file_path, 'w') as file:
-                json.dump({'actions': combined_actions}, file, indent=4)
-
-        # Combine actions and videos if "Combine Scripts and Videos" checkbox is selected
+        # Combine actions and videos if needed
         if combine_scripts_and_videos_var.get():
             combined_actions = combine_actions(all_actions)
             combined_file_path = "Combined_Actions.funscript"
@@ -222,14 +207,57 @@ def save_thresholds():
     """
     Save the updated thresholds for the selected file.
     """
-    selected_file = json_files_listbox.get(json_files_listbox.curselection())
-    try:
-        start_threshold = int(start_entry.get())
-        end_threshold = int(end_entry.get())
-        file_thresholds[selected_file] = {'start': start_threshold, 'end': end_threshold}
-        print(f"Saved thresholds for {selected_file}: Start - {start_threshold} ms, End - {end_threshold} ms")
-    except ValueError:
-        messagebox.showerror("Invalid Input", "Please enter valid numeric values for thresholds.")
+    global selected_index
+    if selected_index is not None:
+        try:
+            start_threshold = int(convert_to_milliseconds(start_entry.get()))
+            end_threshold = int(convert_to_milliseconds(end_entry.get()))
+            file_thresholds[selected_index] = {'start': start_threshold, 'end': end_threshold}
+            print(f"Saved thresholds for file at index {selected_index}: Start - {start_threshold} ms, End - {end_threshold} ms")
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Input must be in the format hh:mm:ss:milliseconds")
+    else:
+        messagebox.showerror("No Selection", "Please select a file from the listbox.")
+
+
+
+def convert_to_milliseconds(time_str):
+    # Split the input string into components
+    parts = time_str.split(':')
+    
+    # Ensure there are exactly 4 parts (hh, mm, ss, milliseconds)
+    if len(parts) != 4:
+        raise ValueError("Input must be in the format hh:mm:ss:milliseconds")
+    
+    # Extract hours, minutes, seconds, and milliseconds
+    hours = int(parts[0])
+    minutes = int(parts[1])
+    seconds = int(parts[2])
+    milliseconds = int(parts[3])
+    
+    # Convert all parts to milliseconds
+    total_milliseconds = (
+        (hours * 3600 * 1000) +  # Convert hours to milliseconds
+        (minutes * 60 * 1000) +  # Convert minutes to milliseconds
+        (seconds * 1000) +       # Convert seconds to milliseconds
+        milliseconds              # Already in milliseconds
+    )
+    
+    return total_milliseconds
+
+def milliseconds_to_time(ms):
+    """
+    Converts milliseconds to time in the format 'hh:mm:ss:milliseconds'.
+    
+    :param ms: Time in milliseconds
+    :return: Formatted time as a string
+    """
+    hours = ms // (1000 * 60 * 60)
+    minutes = (ms % (1000 * 60 * 60)) // (1000 * 60)
+    seconds = (ms % (1000 * 60)) // 1000
+    milliseconds = ms % 1000
+    return f"{hours:02}:{minutes:02}:{seconds:02}:{milliseconds:03}"
+
 
 
 # Initialize the main window
@@ -260,11 +288,11 @@ thresholds_frame = tk.Frame(frame)
 thresholds_frame.pack(pady=10)
 
 # Labels and entries for start and end threshold inputs
-tk.Label(thresholds_frame, text="Start Time (ms):").grid(row=0, column=0, padx=5, pady=5)
+tk.Label(thresholds_frame, text="Start Time:").grid(row=0, column=0, padx=5, pady=5)
 start_entry = tk.Entry(thresholds_frame)
 start_entry.grid(row=0, column=1, padx=5, pady=5)
 
-tk.Label(thresholds_frame, text="End Time (ms):").grid(row=1, column=0, padx=5, pady=5)
+tk.Label(thresholds_frame, text="End Time:").grid(row=1, column=0, padx=5, pady=5)
 end_entry = tk.Entry(thresholds_frame)
 end_entry.grid(row=1, column=1, padx=5, pady=5)
 
