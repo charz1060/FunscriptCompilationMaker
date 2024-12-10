@@ -5,9 +5,72 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.video.compositing.concatenate import concatenate_videoclips
+from pathlib import Path
+
+
 
 
 selected_index = None
+
+# New Method hentaiprodigy69
+def create_video_list_ffmpeg(video_clips, list_file):
+    """
+    Creates a text file listing all video clips for FFmpeg.
+    """
+    with open(list_file, 'w') as f:
+        for clip in video_clips:
+            f.write(f"file '{clip}'\n")
+
+# New Method hentaiprodigy69
+def combine_videos_ffmpeg(video_clips, output_file):
+    """
+    Combines multiple video files into one using FFmpeg.
+    """
+    list_file = 'video_list.txt'
+    
+    # Create the list of videos
+    create_video_list_ffmpeg(video_clips, list_file)
+
+    # Construct the FFmpeg command
+    command = [
+        'ffmpeg', 
+        '-f', 'concat', 
+        '-safe', '0', 
+        '-i', list_file, 
+        '-c', 'copy', 
+        output_file
+    ]
+
+    # Execute the command
+    subprocess.run(command)
+    
+    # Remove the list file after processing
+    os.remove(list_file)
+
+    print(f"Combined video saved to {output_file}")
+
+
+# New Method hentai prodigy 69 
+def all_filenames_are_same(filenames):
+    """
+    Check if all filenames in the list are the same.
+    
+    :param filenames: List of filename strings
+    :return: True if all filenames are the same, False otherwise
+    """
+    if not filenames:
+        return True  # Empty list case
+
+    first_filename = filenames[0]
+    
+    for filename in filenames:
+        if filename != first_filename:
+            print("filename differences here: ", filename, first_filename)
+            return False
+            
+    return True
+
+
 
 def process_file(input_file_path, start_threshold, end_threshold):
     """
@@ -51,7 +114,13 @@ def cut_video(video_file_path, start_ms, end_ms):
         # Run the FFmpeg command
         subprocess.run(ffmpeg_command, check=True)
         print(f"Video cut successfully: {output_file}")
-        return VideoFileClip(output_file)
+
+        
+        clip = VideoFileClip(output_file)
+        duration_ms = clip.duration * 1000  # Convert seconds to milliseconds
+
+        return VideoFileClip(output_file), duration_ms, output_file
+        
     except subprocess.CalledProcessError as e:
         print(f"Error cutting video {video_file_path}: {e}")
         return None
@@ -121,6 +190,9 @@ def process_all_files():
     try:
         all_actions = []
         video_clips = []
+        offset_list = []
+        video_filenames = []
+        clip_filenames = []
         for i in range(json_files_listbox.size()):
             # Get the file path and thresholds for this instance
             funscript_file = json_files_listbox.get(i)
@@ -133,27 +205,45 @@ def process_all_files():
 
             # Handle corresponding video file
             video_file = funscript_file.replace('.funscript', '.mp4')
-            if os.path.exists(video_file) and (combine_scripts_and_cut_videos_var.get() or combine_scripts_and_videos_var.get()):
-                video_clip = cut_video(video_file, start_threshold, end_threshold)
+            if os.path.exists(video_file): 
+                video_clip, vid_length, clip_filename = cut_video(video_file, start_threshold, end_threshold)
                 video_clips.append(video_clip)
+                offset_list.append(vid_length)
+                video_filenames.append(video_file)
+                clip_filenames.append(clip_filename)
 
-        # Combine actions if "Combine Scripts Only" checkbox is selected
-        if combine_scripts_var.get():
-            combined_actions = combine_actions(all_actions)
-            combined_file_path = "Combined_Actions.funscript"
-            with open(combined_file_path, 'w') as file:
-                json.dump({'actions': combined_actions}, file, indent=4)
+                #This part will save every clip's funscript file as well :)
+                json_output_filename = clip_filename.replace('.mp4', '.funscript')
+                with open(json_output_filename, 'w') as file:
+                    json.dump({'actions': filtered_actions}, file, indent=4)             
+                    
+        ### SCRIPT GENERATION PART
+
+        current_working_directory = os.getcwd()
+
+        combined_actions = combine_actions(all_actions, offset_list)
+        combined_file_path = current_working_directory + "\Combined_Actions.funscript"
+        with open(combined_file_path, 'w') as file:
+            json.dump({'actions': combined_actions}, file, indent=4)
+        print("Dumped combined actions to:", combined_file_path)
 
         # Combine actions and videos if needed
         if combine_scripts_and_videos_var.get():
-            combined_actions = combine_actions(all_actions)
-            combined_file_path = "Combined_Actions.funscript"
-            with open(combined_file_path, 'w') as file:
-                json.dump({'actions': combined_actions}, file, indent=4)
 
-            combined_video_path = "Combined_Video.mp4"
+            #hentaiprodigy69 method - this will only work if the videos are in the same format
+
+            combined_video_path_hp69 = "Combined_Video_Lossless_Attempt.mp4"
             if video_clips:
-                combine_videos(video_clips, combined_video_path)
+                if(all_filenames_are_same(video_filenames)):
+                    print("All video clips come from the same file, so we will append losslessly")
+                    combine_videos_ffmpeg(clip_filenames, combined_video_path_hp69)
+                    print("Combined video lossless saved to:", combined_video_path_hp69)
+                else:
+                    print("Not all video clips come from the same file, so we will combine with moviepy and encode")
+                    combined_video_path = "Combined_Video.mp4"
+                    combine_videos(video_clips, combined_video_path)
+                    print("Combined video saved to:", combined_video_path)
+            
 
         messagebox.showinfo("Success", "Files processed and saved successfully!")
 
@@ -161,12 +251,13 @@ def process_all_files():
         messagebox.showerror("Error", f"An error occurred: {str(e)}")
 
 
-def combine_actions(file_actions_list):
+def combine_actions(file_actions_list, offset_list):
     """
     Combines multiple 'actions' lists, offsetting the 'at' values for continuity.
     """
     combined_actions = []
     current_offset = 0
+    file_num = 0
 
     for actions in file_actions_list:
         for action in actions:
@@ -175,7 +266,10 @@ def combine_actions(file_actions_list):
                 'pos': action['pos']
             })
         if actions:
-            current_offset += actions[-1]['at']  # Update offset to ensure continuity
+            #current_offset += actions[-1]['at']  # Update offset to ensure continuity
+            current_offset += offset_list[file_num]
+            file_num += 1
+
 
     return combined_actions
 
@@ -184,7 +278,7 @@ def manage_checkboxes(selected_var):
     """
     Disable other checkboxes when one checkbox is selected.
     Enable all checkboxes if none are selected.
-    """
+    """    
     if selected_var.get():
         # Disable other checkboxes
         if selected_var == combine_scripts_var:
@@ -198,7 +292,7 @@ def manage_checkboxes(selected_var):
             combine_scripts_and_cut_videos_checkbox.config(state="disabled")
     else:
         # Enable all checkboxes if none are selected
-        combine_scripts_checkbox.config(state="normal")
+        combine_scripts_checkbox.config(state="disabled")
         combine_scripts_and_cut_videos_checkbox.config(state="normal")
         combine_scripts_and_videos_checkbox.config(state="normal")
 
@@ -313,6 +407,7 @@ combine_scripts_checkbox = tk.Checkbutton(
     command=lambda: manage_checkboxes(combine_scripts_var)
 )
 combine_scripts_checkbox.pack(pady=5)
+combine_scripts_checkbox.config(state="disabled")
 
 combine_scripts_and_cut_videos_checkbox = tk.Checkbutton(
     frame, text="Combine Scripts and Cut Videos", variable=combine_scripts_and_cut_videos_var,
