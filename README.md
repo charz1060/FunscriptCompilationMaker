@@ -3,7 +3,8 @@
 This is an application to make a new script using sections from existing scripts, basically a script compilation maker tool. You can combine any number of scripts by defining the start and end time of the segments you want, the result is a new script that combines the segments into one file. There is also an option to create the combined video that will be in sync with the generated script.
 
 ## Installation
-To install the required libraries, run the following command: `pip install -r requirements.txt`
+* You will need to download [FFMPEG](https://www.ffmpeg.org/download.html) and [MKVmerge](https://mkvtoolnix.download/downloads.html) for video processing
+* To install the required libraries, run the following command: `pip install -r requirements.txt`
 
 ## Launching the UI
 Running the Python script will open the User Interface.
