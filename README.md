@@ -23,9 +23,7 @@ Running the Python script will open the User Interface.
 
    * To do this you select the script in the box, set the start and end time values and click 'Save Time.'
 
-   * Time must be in milliseconds, make sure you convert the time properly.
-
-   * Note: The UI for this is a little janky, do not use tab to change fields and do not double click anywhere as that will deselect whatever script you have selected in the box.
+   * Time must be in hh:mm:ss:milliseconds format, for example 01:19:22:033.
 
 3. Select the method of script generation you want.
 
